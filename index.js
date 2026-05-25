@@ -27,9 +27,9 @@ try {
     throw new Error("Arquivo wrangler.toml, wrangler.json ou wrangler.jsonc não encontrado na raiz do projeto.");
   }
 
-  // Regex para aceitar tanto formato TOML (=) quanto JSON (:)
-  const dbMatch = wranglerContent.match(/database_name\s*[=:]\s*"([^"]+)"/);
-  const r2Match = wranglerContent.match(/bucket_name\s*[=:]\s*"([^"]+)"/);
+  // Regex para aceitar formato TOML (database_name =) ou JSON ("database_name":)
+  const dbMatch = wranglerContent.match(/(?:\"|')?database_name(?:\"|')?\s*[=:]\s*"([^"]+)"/);
+  const r2Match = wranglerContent.match(/(?:\"|')?bucket_name(?:\"|')?\s*[=:]\s*"([^"]+)"/);
   
   if (!dbMatch || !r2Match) {
     throw new Error("Não foi possível encontrar database_name ou bucket_name na configuração do wrangler");
