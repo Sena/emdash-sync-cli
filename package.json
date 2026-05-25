@@ -1,0 +1,23 @@
+{
+  "name": "emdash-sync-cli",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "bin": {
+    "emdash-sync": "./index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sena/emdash-sync-cli.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Sena/emdash-sync-cli/issues"
+  },
+  "homepage": "https://github.com/Sena/emdash-sync-cli#readme"
+}
