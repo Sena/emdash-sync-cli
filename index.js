@@ -8,21 +8,36 @@ const os = require('os');
 // 🔧 CONFIGURAÇÕES
 // =========================================================================
 
-// Lê dinamicamente o wrangler.toml para descobrir o nome do banco D1 e bucket R2
+// Lê dinamicamente o wrangler.toml ou json/jsonc para descobrir o banco D1 e bucket R2
 let DB_NAME = "";
 let R2_BUCKET = "";
 try {
-  const wranglerToml = fs.readFileSync(path.join(__dirname, 'wrangler.toml'), 'utf-8');
-  const dbMatch = wranglerToml.match(/database_name\s*=\s*"([^"]+)"/);
-  const r2Match = wranglerToml.match(/bucket_name\s*=\s*"([^"]+)"/);
+  let wranglerContent = "";
+  const tomlPath = path.join(process.cwd(), 'wrangler.toml');
+  const jsonPath = path.join(process.cwd(), 'wrangler.json');
+  const jsoncPath = path.join(process.cwd(), 'wrangler.jsonc');
+
+  if (fs.existsSync(tomlPath)) {
+    wranglerContent = fs.readFileSync(tomlPath, 'utf-8');
+  } else if (fs.existsSync(jsonPath)) {
+    wranglerContent = fs.readFileSync(jsonPath, 'utf-8');
+  } else if (fs.existsSync(jsoncPath)) {
+    wranglerContent = fs.readFileSync(jsoncPath, 'utf-8');
+  } else {
+    throw new Error("Arquivo wrangler.toml, wrangler.json ou wrangler.jsonc não encontrado na raiz do projeto.");
+  }
+
+  // Regex para aceitar tanto formato TOML (=) quanto JSON (:)
+  const dbMatch = wranglerContent.match(/database_name\s*[=:]\s*"([^"]+)"/);
+  const r2Match = wranglerContent.match(/bucket_name\s*[=:]\s*"([^"]+)"/);
   
   if (!dbMatch || !r2Match) {
-    throw new Error("Não foi possível encontrar database_name ou bucket_name no wrangler.toml");
+    throw new Error("Não foi possível encontrar database_name ou bucket_name na configuração do wrangler");
   }
   DB_NAME = dbMatch[1];
   R2_BUCKET = r2Match[1];
 } catch (err) {
-  console.error(`❌ Erro ao ler wrangler.toml: ${err.message}`);
+  console.error(`❌ Erro de configuração: ${err.message}`);
   process.exit(1);
 }
 // =========================================================================
@@ -177,7 +192,7 @@ async function sync() {
     console.error('\n❌ Erro durante a sincronização:', error.message);
   } finally {
     // 3. Sanitização de Segurança: Deletar tabela.sql gerado pelo export
-    const sqlFile = path.join(__dirname, 'tabela.sql');
+    const sqlFile = path.join(process.cwd(), 'tabela.sql');
     if (fs.existsSync(sqlFile)) {
       fs.rmSync(sqlFile, { force: true });
       console.log('\n🧹 [Sanitização] Arquivo temporário de dump SQL deletado com sucesso.');
