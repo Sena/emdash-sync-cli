@@ -105,7 +105,7 @@ function resolveTables() {
     const ignored = all.length - discovered.length;
     console.log(
       `🧭 ${discovered.length} tabelas descobertas no D1 remoto` +
-        (ignored > 0 ? ` (${ignored} ignoradas: internas/FTS).` : '.'),
+      (ignored > 0 ? ` (${ignored} ignoradas: internas/FTS).` : '.'),
     );
     return discovered;
   } catch (err) {
@@ -216,6 +216,42 @@ async function sync() {
 
     console.log(`🚀 Exportando as tabelas do D1 de produção [Banco: ${DB_NAME}]...`);
     execSync(`npx wrangler d1 export ${DB_NAME} --remote ${tableArgs} --output=tabela.sql`, { stdio: 'inherit' });
+
+    console.log('🏗️  Reorganizando schema do dump para resolver dependências de Foreign Key...');
+    const sqlDumpPath = path.join(process.cwd(), 'tabela.sql');
+    const sqlContent = fs.readFileSync(sqlDumpPath, 'utf-8');
+
+    const pragmas = [];
+    const creates = [];
+    const inserts = [];
+    const others = [];
+
+    sqlContent.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      const upper = trimmed.toUpperCase();
+      if (upper.startsWith('PRAGMA')) {
+        pragmas.push(trimmed);
+      } else if (upper.startsWith('CREATE TABLE')) {
+        creates.push(trimmed);
+      } else if (upper.startsWith('INSERT')) {
+        inserts.push(trimmed);
+      } else {
+        others.push(trimmed); // CREATE INDEX, CREATE TRIGGER, VIEWS, etc
+      }
+    });
+
+    // Desabilita FK temporariamente e estrutura: PRAGMAS -> TABELAS -> OUTROS -> INSERTS
+    const reorderedSql = [
+      ...pragmas,
+      'PRAGMA foreign_keys=OFF;',
+      ...creates,
+      ...others,
+      ...inserts
+    ].join('\n');
+
+    fs.writeFileSync(sqlDumpPath, reorderedSql, 'utf-8');
 
     console.log('\n📥 Importando o banco para o ambiente local...');
     execSync(`npx wrangler d1 execute ${DB_NAME} --local --file=tabela.sql`, { stdio: 'inherit' });
