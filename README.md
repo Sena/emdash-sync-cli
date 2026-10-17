@@ -60,6 +60,17 @@ Both commands accept:
 - `--seed=<file>` — send a specific seed JSON instead of generating one from the local database.
 - `--url=<url>` — target instance (defaults to the resolution order above).
 
+## 🔐 Authentication & Troubleshooting
+
+Two credentials are involved, and the failure messages tell you exactly how to fix them:
+
+- **Cloudflare / wrangler** — used by `pull` (remote reads) and by `push` target discovery. When the sign-in is missing or expired, the CLI opens the login flow in your browser (interactive terminals) and retries the command by itself. To fix manually: `npx wrangler login` (it opens the browser — click "Allow"). Wrong account? `npx wrangler logout`, then login again. Manual API tokens: https://dash.cloudflare.com/profile/api-tokens.
+- **EmDash admin session** — used by `push` to talk to the target instance. On localhost the dev-bypass grants a session automatically (the dev server must be running: `npm run dev`). For remote targets, fix with `npx emdash login --url <url>` (the CLI can open the login flow for you when interactive) or set `EMDASH_TOKEN`.
+
+Auto-opening the login flow can be disabled with `EMDASH_SYNC_AUTO_LOGIN=0` (useful in scripts and CI) — the errors still carry the exact fix instructions.
+
+Authentication failures happen before anything is touched, so a failed command never leaves a partial state — fix the login and run it again.
+
 ## 📁 Project Structure
 
 A zero-dependency CommonJS package: `index.js` is a thin bootstrap and every module under `lib/` owns a single concern.
@@ -74,6 +85,7 @@ A zero-dependency CommonJS package: `index.js` is a thin bootstrap and every mod
 | `lib/seed.js` | Seed loading: generated from the local DB, or from `--seed`. |
 | `lib/api.js` | EmDash admin API client (auth, dev bypass, token refresh). |
 | `lib/site-url.js` | Production URL resolution (env → .env → Cloudflare → EmDash session). |
+| `lib/auth.js` | Credential failure detection and one-step login recovery. |
 | `lib/config.js` | Reads `wrangler.*` and resolves the DB, bucket and project paths. |
 | `lib/wrangler.js` | Every `wrangler` invocation (D1 queries/export/import, R2 writes). |
 | `lib/tables.js` | Remote D1 table discovery and fallback policy. |
