@@ -28,7 +28,7 @@ Then `npm run sync -- pull --apply` refreshes your local environment with the la
 ## ⬇️ `pull` — production → local
 
 1. Dynamically reads your `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc` to find your DB and bucket names.
-2. Reads production **read-only** first: discovers the D1 tables (`sqlite_master`, skipping internal SQLite/Miniflare tables and the EmDash FTS index) and the public project URL (`emdash:site_url` in the `options` table). In dry-run, the plan is printed here and nothing else happens.
+2. Reads production **read-only** first: discovers the D1 tables (`sqlite_master`, skipping internal SQLite/Miniflare tables and the EmDash FTS index; retried before falling back to a built-in list) and the public project URL (`emdash:site_url` in the `options` table). In dry-run, the plan is printed here and nothing else happens.
 3. (`--apply`) Gracefully kills any running Astro/Vite dev server (port 4321) to unlock the SQLite files.
 4. (`--apply`) Copies the current local `.wrangler/state/v3/{d1,r2}` to `.wrangler/backups/<timestamp>/`, keeping the last 3 (disable with `--no-backup`). This copy exists **only as a rollback point** — there is no restore command; to roll back, stop the dev server and copy `.wrangler/backups/<timestamp>/{d1,r2}` back over `.wrangler/state/v3/`.
 5. (`--apply`) Performs a clean wipe of the local D1 and R2 emulator state.

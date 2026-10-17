@@ -10,7 +10,7 @@ This document provides context for AI Assistants and Agents working with the `em
   - `schema.js` — pure planner diffing the seed against the remote schema; `seed.js` — seed loading (local DB via `emdash export-seed`, or `--seed`).
   - `api.js` — EmDash admin API client (auth, dev bypass, token refresh); `site-url.js` — production URL resolution.
   - `config.js` — wrangler discovery and project paths; `wrangler.js` — every `wrangler` invocation (single choke point).
-  - `tables.js` — remote D1 table discovery + fallback list; `state.js` — local emulator state (dev server, backups, wipe).
+  - `tables.js` — retrying remote D1 table discovery + fallback list; `state.js` — local emulator state (dev server, backups, wipe).
   - `sql.js` — pure dump reordering; `media.js` — media download into local R2; `ui.js` — console output helpers.
 - It is designed exclusively for Astro + EmDash projects that utilize Cloudflare D1 and R2 via Wrangler.
 
