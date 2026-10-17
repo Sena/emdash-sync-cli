@@ -43,6 +43,23 @@ Then simply run `npm run sync` whenever you want to refresh your local environme
 npx github:Sena/emdash-sync-cli --no-backup
 ```
 
+## 📁 Project Structure
+
+A zero-dependency CommonJS package: `index.js` is a thin bootstrap and every module under `lib/` owns a single concern.
+
+| Path | Responsibility |
+| --- | --- |
+| `index.js` | Entry point (shebang); hands control to `lib/cli.js`. |
+| `lib/cli.js` | Flag parsing and command dispatch (today: the default `pull`). |
+| `lib/pull.js` | Orchestrates the full sync flow. |
+| `lib/config.js` | Reads `wrangler.*` and resolves the DB, bucket and project paths. |
+| `lib/wrangler.js` | Every `wrangler` invocation (D1 queries/export/import, R2 writes). |
+| `lib/tables.js` | Remote D1 table discovery and fallback policy. |
+| `lib/state.js` | Local emulator state: dev server, backups, wipe. |
+| `lib/sql.js` | SQL dump reordering (pure function). |
+| `lib/media.js` | Media download and injection into local R2. |
+| `lib/ui.js` | Console output helpers. |
+
 ## ⚠️ Limitations & Requirements
 
 - **Node.js**: Requires Node v18+ (relies on native `fetch` API).
