@@ -23,8 +23,19 @@ This document provides context for AI Assistants and Agents working with the `em
 5. **Push never carries data**: `seed.js` deletes any `content` payload in code, regardless of the seed source, and `schema.js` only reads `collections`, `blockTypes` and `taxonomies` from the seed.
 6. **Sanitization**: all temporary files (e.g., `dump.sql`, temporary image buffers from `os.tmpdir()`) must be deleted in a `finally` block, regardless of execution success or failure.
 7. **Actionable auth failures**: a missing/expired credential must never surface as a raw command error — detect it, offer the interactive login in TTYs (retrying once after success), and always include the exact fix command and link in the message. Auto-login honors `EMDASH_SYNC_AUTO_LOGIN=0`, which tests and scripts must set.
+8. **Hermetic tests**: `npm test` must never touch wrangler, Cloudflare, or the real network — extend `test/helpers/fake-emdash.js` for new API surface, never reach for the real thing.
 
-## Testing Locally
+## Tests
+Hermetic suite: no wrangler, no credentials, no real network.
+```bash
+npm test
+```
+- `test/helpers/fake-emdash.js` — in-memory fake of the EmDash admin API (ephemeral HTTP server); records every request so tests can assert what was (and was not) written. New endpoints the CLI touches need a matching route here.
+- `test/helpers/run-cli.js` — spawns the real CLI with a clean environment: no credentials, no URL settings, `EMDASH_SYNC_AUTO_LOGIN=0`.
+- Files: `sql`, `seed`, `tables`, `auth`, `api`, `schema`, `cli`, `push` (end-to-end against the fake API). `pull` is wrangler-facing and validated manually.
+- A test making wrangler or the real network reachable is a bug: extend the fake instead.
+
+## Manual Testing (against a real project)
 Because project files are always resolved from `process.cwd()`, you can run the CLI from any target EmDash project without copying anything:
 ```bash
 node /path/to/emdash-sync-cli/index.js pull         # dry-run plan (production → local)

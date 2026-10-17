@@ -1,13 +1,13 @@
 {
   "name": "emdash-sync-cli",
   "version": "1.0.0",
-  "description": "",
+  "description": "Zero-config EmDash CMS sync: pull an exact clone of production into the local Wrangler emulator; push only schema (collections, fields, block types, taxonomies) to production.",
   "main": "index.js",
   "bin": {
     "emdash-sync": "./index.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"test/*.test.js\""
   },
   "repository": {
     "type": "git",

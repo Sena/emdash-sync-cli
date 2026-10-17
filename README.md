@@ -93,6 +93,20 @@ A zero-dependency CommonJS package: `index.js` is a thin bootstrap and every mod
 | `lib/sql.js` | SQL dump reordering (pure function). |
 | `lib/media.js` | Media download and injection into local R2. |
 | `lib/ui.js` | Console output helpers. |
+| `test/` | Hermetic test suite (`npm test`): fake EmDash API + CLI process helpers. |
+
+## 🧪 Testing
+
+```bash
+npm test
+```
+
+The suite is hermetic by design — it never touches wrangler, Cloudflare, or the real network:
+
+- `test/helpers/fake-emdash.js` is an in-memory stand-in for the EmDash admin API (ephemeral HTTP server) that records every request, so tests can assert what was — and was not — written.
+- `test/helpers/run-cli.js` spawns the real CLI in a clean environment: no credentials, no URL settings, no auto-login.
+
+Covered: SQL dump reordering, local database discovery, seed loading (content always stripped), table discovery (retry + fallback list), auth-failure detection and messages, the API client (dev-bypass, token fallback, error shapes), the schema planner (create/update steps, idempotence, breaking block-type changes), argument parsing and CLI flows, and `push` end-to-end against the fake API (dry-run writes nothing, `--apply` is idempotent). The wrangler-facing side (`pull`) is exercised manually.
 
 ## ⚠️ Limitations & Requirements
 
