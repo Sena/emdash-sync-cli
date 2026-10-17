@@ -9,6 +9,7 @@ This document provides context for AI Assistants and Agents working with the `em
   - `pull.js` — orchestrates production → local (dry-run plan + full sync); `push.js` — local → production schema plan/apply.
   - `schema.js` — pure planner diffing the seed against the remote schema; `seed.js` — seed loading (local DB via `emdash export-seed`, or `--seed`).
   - `api.js` — EmDash admin API client (auth, dev bypass, token refresh); `site-url.js` — production URL resolution.
+  - `auth.js` — credential failure detection + interactive login recovery (Cloudflare and EmDash).
   - `config.js` — wrangler discovery and project paths; `wrangler.js` — every `wrangler` invocation (single choke point).
   - `tables.js` — retrying remote D1 table discovery + fallback list; `state.js` — local emulator state (dev server, backups, wipe).
   - `sql.js` — pure dump reordering; `media.js` — media download into local R2; `ui.js` — console output helpers.
@@ -21,6 +22,7 @@ This document provides context for AI Assistants and Agents working with the `em
 4. **Immutability of Production**: all remote read commands (`wrangler d1 export --remote`, `wrangler d1 execute --remote`, `fetch(GET)`) must be strictly read-only. The only production writes in the whole tool are the schema mutations performed by `push --apply` through the admin API.
 5. **Push never carries data**: `seed.js` deletes any `content` payload in code, regardless of the seed source, and `schema.js` only reads `collections`, `blockTypes` and `taxonomies` from the seed.
 6. **Sanitization**: all temporary files (e.g., `dump.sql`, temporary image buffers from `os.tmpdir()`) must be deleted in a `finally` block, regardless of execution success or failure.
+7. **Actionable auth failures**: a missing/expired credential must never surface as a raw command error — detect it, offer the interactive login in TTYs (retrying once after success), and always include the exact fix command and link in the message. Auto-login honors `EMDASH_SYNC_AUTO_LOGIN=0`, which tests and scripts must set.
 
 ## Testing Locally
 Because project files are always resolved from `process.cwd()`, you can run the CLI from any target EmDash project without copying anything:
