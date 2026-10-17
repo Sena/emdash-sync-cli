@@ -16,6 +16,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=18"
+  },
   "bugs": {
     "url": "https://github.com/Sena/emdash-sync-cli/issues"
   },

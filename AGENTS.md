@@ -4,7 +4,12 @@ This document provides context for AI Assistants and Agents working with the `em
 
 ## Codebase Context
 - This is a standalone CLI tool published to be used via `npx`.
-- The main entry point is `index.js`, which includes the `#!/usr/bin/env node` shebang.
+- `index.js` is a thin bootstrap (shebang); all logic lives in `lib/`, one concern per module:
+  - `cli.js` — flag parsing and command dispatch (today: `pull`, the default command).
+  - `pull.js` — orchestrates the sync flow; `config.js` — wrangler discovery and project paths.
+  - `wrangler.js` — every `wrangler` invocation (single choke point); `tables.js` — D1 table discovery.
+  - `state.js` — local emulator state (dev server, backups, wipe); `sql.js` — pure dump reordering.
+  - `media.js` — media download into local R2; `ui.js` — console output helpers.
 - It is designed exclusively for Astro + EmDash projects that utilize Cloudflare D1 and R2 via Wrangler.
 
 ## Design Principles
@@ -14,8 +19,12 @@ This document provides context for AI Assistants and Agents working with the `em
 4. **Sanitization**: All temporary files (e.g., `tabela.sql`, temporary image buffers from `os.tmpdir()`) must be deleted in a `finally` block, regardless of execution success or failure.
 
 ## Testing Locally
-If you modify this script, you can test it by running:
+Because project files are always resolved from `process.cwd()`, you can run the CLI from any target EmDash project without copying anything:
 ```bash
-node index.js
+node /path/to/emdash-sync-cli/index.js
 ```
-from within a target EmDash project directory (after temporarily copying the updated file there), or by pushing to GitHub and running `npx github:Sena/emdash-sync-cli` to test the remote execution flow.
+Alternatively, push a branch and test the remote execution flow:
+```bash
+npx github:Sena/emdash-sync-cli#<branch>
+```
+Note: a full run kills the dev server on port 4321, wipes the local D1/R2 and re-imports everything from production.
