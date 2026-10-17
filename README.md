@@ -1,29 +1,19 @@
 # EmDash Local Sync CLI
 
-A zero-config, plug-and-play CLI tool to synchronize production databases and media buckets from Cloudflare (D1 & R2) directly to your local Wrangler emulator for EmDash CMS development.
+A zero-config, plug-and-play CLI tool for EmDash CMS development on Cloudflare: **pull** an exact 1:1 clone of the production D1 database and R2 media bucket into your local Wrangler emulator, and **push** your local schema (collections, fields, block types, taxonomies) to production — never data.
 
-## 🌟 Purpose
-
-This library eliminates the need for manual database exports and fragmented local `.db` files when building with EmDash. By running a single command, you get an exact 1:1 clone of your production edge environment running locally on Miniflare.
-
-**What it does:**
-1. Dynamically reads your `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc` to find your DB and Bucket names.
-2. Gracefully kills any running Astro/Vite dev servers (Port 4321) to unlock SQLite files.
-3. Copies the current local `.wrangler/state/v3/{d1,r2}` to `.wrangler/backups/<timestamp>/`, keeping the last 3 (disable with `--no-backup`). This copy exists **only as a rollback point** — there is no restore command; to roll back, stop the dev server and copy `.wrangler/backups/<timestamp>/{d1,r2}` back over `.wrangler/state/v3/`.
-4. Performs a clean wipe of the local D1 and R2 emulator state (`.wrangler/state/v3/d1` and `.wrangler/state/v3/r2`).
-5. Discovers the production D1 tables dynamically (`sqlite_master`), skipping internal SQLite/Miniflare tables and the EmDash FTS index, then executes a safe, read-only remote export.
-6. Imports the dump into your local D1 database.
-7. Queries the local DB to dynamically discover the project's production URL (`emdash:site_url`).
-8. Fetches all production media via the API in batched parallel requests and natively injects them into your local Miniflare R2 bucket.
-9. Prints a media summary (rows in the DB vs. downloaded/skipped/failed) so an incomplete clone is visible.
-10. Safely removes all temporary SQL dumps and buffers, leaving your local file system completely clean.
+Both directions are **dry-run by default**: a command prints its plan and changes nothing until you add `--apply`. Commands are explicit — running the CLI without a command prints the help.
 
 ## 🚀 How to Use
 
-You do not need to install this package locally! You can run it on demand in any EmDash project using `npx`:
+You do not need to install this package! Run it on demand in any EmDash project using `npx`:
 
 ```bash
-npx github:Sena/emdash-sync-cli
+npx github:Sena/emdash-sync-cli pull            # dry-run: shows what would be pulled
+npx github:Sena/emdash-sync-cli pull --apply    # production → local (D1 + R2)
+npx github:Sena/emdash-sync-cli push            # dry-run: shows the schema plan
+npx github:Sena/emdash-sync-cli push --apply    # local schema → production
+npx github:Sena/emdash-sync-cli help
 ```
 
 ### Recommendation
@@ -33,15 +23,42 @@ Add it to your `package.json` scripts:
   "sync": "npx github:Sena/emdash-sync-cli"
 }
 ```
-Then simply run `npm run sync` whenever you want to refresh your local environment with the latest production data.
+Then `npm run sync -- pull --apply` refreshes your local environment with the latest production data (the `--` forwards the command and its flags), and `npm run sync -- push` shows the schema plan.
 
-### Options
+## ⬇️ `pull` — production → local
+
+1. Dynamically reads your `wrangler.toml`, `wrangler.json`, or `wrangler.jsonc` to find your DB and bucket names.
+2. Reads production **read-only** first: discovers the D1 tables (`sqlite_master`, skipping internal SQLite/Miniflare tables and the EmDash FTS index) and the public project URL (`emdash:site_url` in the `options` table). In dry-run, the plan is printed here and nothing else happens.
+3. (`--apply`) Gracefully kills any running Astro/Vite dev server (port 4321) to unlock the SQLite files.
+4. (`--apply`) Copies the current local `.wrangler/state/v3/{d1,r2}` to `.wrangler/backups/<timestamp>/`, keeping the last 3 (disable with `--no-backup`). This copy exists **only as a rollback point** — there is no restore command; to roll back, stop the dev server and copy `.wrangler/backups/<timestamp>/{d1,r2}` back over `.wrangler/state/v3/`.
+5. (`--apply`) Performs a clean wipe of the local D1 and R2 emulator state.
+6. (`--apply`) Runs a safe, read-only remote export of every production table and imports the dump into your local D1.
+7. (`--apply`) Fetches all production media via the public API in batched parallel requests and natively injects them into your local Miniflare R2 bucket.
+8. (`--apply`) Prints a media summary (rows in the DB vs. downloaded/skipped/failed), so an incomplete clone is visible, and safely removes all temporary files.
+
+## ⬆️ `push` — local → production (schema only)
+
+1. Resolves the target instance, in order: `--url` → `EMDASH_URL` → `SITE_URL` (environment or `.env`/`.env.local`) → the Worker's custom domain on Cloudflare (via the wrangler credential) → a single EmDash CLI session.
+2. Loads the desired schema: **by default it is generated from your local database** (`npx emdash export-seed` reads the local D1 SQLite directly — the local database is the source of truth). Use `--seed=<file>` to push a specific seed file instead (e.g. a frozen snapshot).
+3. Authenticates against the admin API (Bearer token from `EMDASH_TOKEN` or `npx emdash login`; a dev-bypass cookie on localhost).
+4. Diffs the seed against the remote schema and prints the steps (`create collection`, `create field`, `update field`, `create taxonomy`, ...). With `--apply`, each step is executed in order; with no differences it prints "nothing to do".
+5. **Never sends data**: content, terms, menus, widgets, settings and users are ignored, and any `content` payload present in the seed is stripped in code. A change to the fields of an existing block type is refused with instructions — that is a breaking change requiring a new version and a renderer swap.
+
+## ⚙️ Options
+
+Both commands accept:
+
+- `--apply` — actually execute. Without it every command is a dry-run plan.
+- `-h`, `--help` — print the help.
+
+`pull` only:
 
 - `--no-backup` — skip the automatic backup of the local emulator state before the wipe. Useful when you know there is nothing local worth rolling back to.
 
-```bash
-npx github:Sena/emdash-sync-cli --no-backup
-```
+`push` only:
+
+- `--seed=<file>` — send a specific seed JSON instead of generating one from the local database.
+- `--url=<url>` — target instance (defaults to the resolution order above).
 
 ## 📁 Project Structure
 
@@ -50,8 +67,13 @@ A zero-dependency CommonJS package: `index.js` is a thin bootstrap and every mod
 | Path | Responsibility |
 | --- | --- |
 | `index.js` | Entry point (shebang); hands control to `lib/cli.js`. |
-| `lib/cli.js` | Flag parsing and command dispatch (today: the default `pull`). |
-| `lib/pull.js` | Orchestrates the full sync flow. |
+| `lib/cli.js` | Flag parsing and dispatch of the explicit commands (`pull`, `push`, `help`). |
+| `lib/pull.js` | Orchestrates production → local: dry-run plan and the full sync. |
+| `lib/push.js` | Orchestrates local → production: schema plan and apply. |
+| `lib/schema.js` | Diff between the desired seed and the remote schema (pure planner). |
+| `lib/seed.js` | Seed loading: generated from the local DB, or from `--seed`. |
+| `lib/api.js` | EmDash admin API client (auth, dev bypass, token refresh). |
+| `lib/site-url.js` | Production URL resolution (env → .env → Cloudflare → EmDash session). |
 | `lib/config.js` | Reads `wrangler.*` and resolves the DB, bucket and project paths. |
 | `lib/wrangler.js` | Every `wrangler` invocation (D1 queries/export/import, R2 writes). |
 | `lib/tables.js` | Remote D1 table discovery and fallback policy. |
@@ -64,8 +86,8 @@ A zero-dependency CommonJS package: `index.js` is a thin bootstrap and every mod
 
 - **Node.js**: Requires Node v18+ (relies on native `fetch` API).
 - **Wrangler**: Requires Wrangler CLI installed locally in the project.
-- **WAF/Firewalls**: The tool downloads media by querying the public `/_emdash/api/media/file/` endpoint. If your production site is blocked by strict Cloudflare Captcha rules or WAF restrictions, the media fetch requests might fail.
-- **Destructive Local Sync**: Running this tool **permanently deletes** any content or images you created *only* locally. It forces the local environment to perfectly mirror production. The previous local state is copied to `.wrangler/backups/` (unless `--no-backup`) **only as a rollback point** — nothing else consumes it: to undo a sync, stop the dev server and copy the folders from `.wrangler/backups/<timestamp>/{d1,r2}` back into `.wrangler/state/v3/`.
+- **WAF/Firewalls**: `pull` downloads media by querying the public `/_emdash/api/media/file/` endpoint. If your production site is blocked by strict Cloudflare Captcha rules or WAF restrictions, the media fetch requests might fail.
+- **Destructive local sync**: `pull --apply` **permanently deletes** any content or images you created *only* locally. It forces the local environment to perfectly mirror production. The previous local state is copied to `.wrangler/backups/` (unless `--no-backup`) **only as a rollback point** — nothing else consumes it.
 - **Search index**: FTS tables are intentionally **not** exported (restoring FTS5 shadow tables from a SQL dump is fragile). EmDash rebuilds the index automatically on the first search request locally, so search matches production once it is used.
 - **Large media**: videos and large files are still downloaded into memory in batches; streaming downloads are a planned improvement.
 
