@@ -30,10 +30,11 @@ Hermetic suite: no wrangler, no credentials, no real network.
 ```bash
 npm test
 ```
-- `test/helpers/fake-emdash.js` — in-memory fake of the EmDash admin API (ephemeral HTTP server); records every request so tests can assert what was (and was not) written. New endpoints the CLI touches need a matching route here.
+- `test/helpers/fake-emdash.js` — in-memory fake of the EmDash admin API (ephemeral HTTP server); records every request so tests can assert what was (and was not) written. It also serves the public media endpoint (`/_emdash/api/media/file/<key>`), with injectable `status`, `delayMs` and `failures` per file, and tracks `maxInFlight` so concurrency is asserted, not assumed. New endpoints the CLI touches need a matching route here.
+- `test/helpers/fake-wrangler.js` — stand-in for the `wrangler` CLI (`d1 execute/export`, `r2 object put`) injected through `EMDASH_WRANGLER_COMMAND`. It writes objects to `FAKE_WRANGLER_DIR/objects`, reads the fixture from `state.json` and records every call in `calls.jsonl`. This is what makes `pull` testable end to end.
 - `test/helpers/run-cli.js` — spawns the real CLI with a clean environment: no credentials, no URL settings, `EMDASH_SYNC_AUTO_LOGIN=0`.
-- Files: `sql`, `seed`, `tables`, `auth`, `api`, `schema`, `cli`, `push` (end-to-end against the fake API). `pull` is wrangler-facing and validated manually.
-- A test making wrangler or the real network reachable is a bug: extend the fake instead.
+- Files: `sql`, `seed`, `tables`, `auth`, `api`, `schema`, `cli`, `push` and `pull` (end-to-end against the fake API + fake wrangler).
+- A test making wrangler or the real network reachable is a bug: extend the fake instead. Tests must never use a real site, bucket, project or credential — fixtures are synthetic (`127.0.0.1`, `fake-db`, `fake-bucket`), and `EMDASH_SYNC_DEV_PORT` keeps `killDevServer` away from a real dev server on 4321.
 
 ## Manual Testing (against a real project)
 Because project files are always resolved from `process.cwd()`, you can run the CLI from any target EmDash project without copying anything:
