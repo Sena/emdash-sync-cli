@@ -33,7 +33,7 @@ Then `npm run sync -- pull --apply` refreshes your local environment with the la
 4. (`--apply`) Copies the current local `.wrangler/state/v3/{d1,r2}` to `.wrangler/backups/<timestamp>/`, keeping the last 3 (disable with `--no-backup`). This copy exists **only as a rollback point** — there is no restore command; to roll back, stop the dev server and copy `.wrangler/backups/<timestamp>/{d1,r2}` back over `.wrangler/state/v3/`.
 5. (`--apply`) Performs a clean wipe of the local D1 and R2 emulator state.
 6. (`--apply`) Runs a safe, read-only remote export of every production table and imports the dump into your local D1.
-7. (`--apply`) Fetches all production media via the public API in batched parallel requests and natively injects them into your local Miniflare R2 bucket.
+7. (`--apply`) Fetches all production media via the public API and natively injects it into your local Miniflare R2 bucket, with several files in flight at once (streamed straight to disk, each object written by an async `wrangler r2 object put --local`). The download concurrency stays low on purpose: production starts resetting connections above a handful of parallel requests.
 8. (`--apply`) Prints a media summary (rows in the DB vs. downloaded/skipped/failed), so an incomplete clone is visible, and safely removes all temporary files.
 
 ## ⬆️ `push` — local → production (schema only)
@@ -54,6 +54,7 @@ Both commands accept:
 `pull` only:
 
 - `--no-backup` — skip the automatic backup of the local emulator state before the wipe. Useful when you know there is nothing local worth rolling back to.
+- `EMDASH_SYNC_CONCURRENCY=<n>` (env) — media files in flight at once (default `4`, clamped to 32). The win comes from overlapping the local R2 writes; raising it past a handful mostly buys connection resets from the live site.
 
 `push` only:
 
@@ -115,7 +116,7 @@ Covered: SQL dump reordering, local database discovery, seed loading (content al
 - **WAF/Firewalls**: `pull` downloads media by querying the public `/_emdash/api/media/file/` endpoint. If your production site is blocked by strict Cloudflare Captcha rules or WAF restrictions, the media fetch requests might fail.
 - **Destructive local sync**: `pull --apply` **permanently deletes** any content or images you created *only* locally. It forces the local environment to perfectly mirror production. The previous local state is copied to `.wrangler/backups/` (unless `--no-backup`) **only as a rollback point** — nothing else consumes it.
 - **Search index**: FTS tables are intentionally **not** exported (restoring FTS5 shadow tables from a SQL dump is fragile). EmDash rebuilds the index automatically on the first search request locally, so search matches production once it is used.
-- **Large media**: videos and large files are still downloaded into memory in batches; streaming downloads are a planned improvement.
+- **Media concurrency**: media downloads are streamed to disk and mirrored a few files at a time. On a slow link the media step dominates a `pull --apply`; lower `EMDASH_SYNC_CONCURRENCY` if the site pushes back, raise it only if you know the origin tolerates it.
 
 ## 🤝 Contributing
 
