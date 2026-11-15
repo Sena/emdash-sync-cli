@@ -23,6 +23,10 @@ function stripFields(collection) {
  * @param {Array} [options.collections] Initial collections (each may carry a `fields` array).
  * @param {Array} [options.blockTypes] Initial block types (a `fields` array is wrapped into version 1).
  * @param {Array} [options.taxonomies] Initial taxonomies.
+ * @param {Object<string, Buffer|string|object>} [options.media] Files served by
+ *   the public media endpoint, keyed by storage key. A string/Buffer is the
+ *   body; an object may set `status`, `contentType`, `delayMs` and `failures`
+ *   (how many initial requests answer 503, to exercise the retry).
  */
 async function startFakeEmdash(options = {}) {
   const state = {
@@ -50,6 +54,14 @@ async function startFakeEmdash(options = {}) {
   for (const taxonomy of options.taxonomies ?? []) {
     state.taxonomies.set(taxonomy.name, { ...taxonomy });
   }
+
+  const mediaFiles = new Map();
+  for (const [key, spec] of Object.entries(options.media ?? {})) {
+    const file = Buffer.isBuffer(spec) || typeof spec === 'string' ? { body: spec } : { ...spec };
+    mediaFiles.set(key, { status: 200, contentType: 'application/octet-stream', delayMs: 0, failures: 0, hits: 0, ...file });
+  }
+
+  const mediaStats = { inFlight: 0, maxInFlight: 0, requests: [] };
 
   const requests = [];
 
@@ -85,6 +97,44 @@ async function startFakeEmdash(options = {}) {
     const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
     const body = req.method === 'POST' || req.method === 'PUT' ? await readBody(req) : undefined;
     requests.push({ method: req.method, path: pathname, body });
+
+    // /_emdash/api/media/file/<key> — public (no auth), like the real endpoint.
+    const MEDIA_PREFIX = '/_emdash/api/media/file/';
+    if (pathname.startsWith(MEDIA_PREFIX)) {
+      const key = decodeURIComponent(pathname.slice(MEDIA_PREFIX.length));
+      const file = mediaFiles.get(key);
+
+      if (!file) {
+        sendJson(res, 404, { success: false, error: 'not found' });
+        return;
+      }
+
+      file.hits += 1;
+      mediaStats.inFlight += 1;
+      mediaStats.maxInFlight = Math.max(mediaStats.maxInFlight, mediaStats.inFlight);
+      mediaStats.requests.push({ key, hit: file.hits });
+
+      // `failures` makes the first N requests answer 503, so tests can assert
+      // that a transient rejection is retried instead of skipped.
+      const failing = file.failures > 0;
+      if (failing) file.failures -= 1;
+      const status = failing ? 503 : file.status;
+      const body = Buffer.isBuffer(file.body) ? file.body : Buffer.from(String(file.body ?? ''));
+
+      const respond = () => {
+        mediaStats.inFlight -= 1;
+        if (status >= 400) {
+          sendJson(res, status, { success: false, error: 'media unavailable' });
+          return;
+        }
+        res.writeHead(status, { 'Content-Type': file.contentType, 'Content-Length': body.length });
+        res.end(body);
+      };
+
+      if (file.delayMs) setTimeout(respond, file.delayMs);
+      else respond();
+      return;
+    }
 
     // The real endpoint accepts a plain GET (that is how the CLI calls it).
     if (pathname === DEV_BYPASS && (req.method === 'GET' || req.method === 'POST')) {
@@ -222,6 +272,8 @@ async function startFakeEmdash(options = {}) {
   return {
     url: `http://127.0.0.1:${port}`,
     state,
+    media: mediaFiles,
+    mediaStats,
     requests,
     /** Requests that change remote state (dev-bypass excluded). */
     writes: () => requests.filter((request) => request.method !== 'GET' && request.path !== DEV_BYPASS),

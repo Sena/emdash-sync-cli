@@ -36,6 +36,8 @@ Then `npm run sync -- pull --apply` refreshes your local environment with the la
 7. (`--apply`) Fetches all production media via the public API and natively injects it into your local Miniflare R2 bucket, with several files in flight at once (streamed straight to disk, each object written by an async `wrangler r2 object put --local`). The download concurrency stays low on purpose: production starts resetting connections above a handful of parallel requests.
 8. (`--apply`) Prints a media summary (rows in the DB vs. downloaded/skipped/failed), so an incomplete clone is visible, and safely removes all temporary files.
 
+Exit code: `0` when every media file mirrored (or when the only gaps are records whose file production no longer serves). `1` when a file could not be downloaded or written — the closing message then says the local environment is **not** identical to production, instead of claiming a clean clone.
+
 ## ⬆️ `push` — local → production (schema only)
 
 1. Resolves the target instance, in order: `--url` → `EMDASH_URL` → `SITE_URL` (environment or `.env`/`.env.local`) → the Worker's custom domain on Cloudflare (via the wrangler credential) → a single EmDash CLI session.
@@ -55,6 +57,8 @@ Both commands accept:
 
 - `--no-backup` — skip the automatic backup of the local emulator state before the wipe. Useful when you know there is nothing local worth rolling back to.
 - `EMDASH_SYNC_CONCURRENCY=<n>` (env) — media files in flight at once (default `4`, clamped to 32). The win comes from overlapping the local R2 writes; raising it past a handful mostly buys connection resets from the live site.
+- `EMDASH_SYNC_DEV_PORT=<port>` (env) — port of the dev server to release before the wipe (default `4321`).
+- `EMDASH_WRANGLER_COMMAND=<command>` (env, advanced) — replaces `wrangler` entirely. That is how the test suite injects its fake CLI; leave it unset in normal use.
 
 `push` only:
 
@@ -104,10 +108,11 @@ npm test
 
 The suite is hermetic by design — it never touches wrangler, Cloudflare, or the real network:
 
-- `test/helpers/fake-emdash.js` is an in-memory stand-in for the EmDash admin API (ephemeral HTTP server) that records every request, so tests can assert what was — and was not — written.
+- `test/helpers/fake-emdash.js` is an in-memory stand-in for the EmDash admin API (ephemeral HTTP server) that records every request, so tests can assert what was — and was not — written. It also serves the public media endpoint, with injectable statuses, delays and failures.
+- `test/helpers/fake-wrangler.js` answers the `d1` and `r2` calls through `EMDASH_WRANGLER_COMMAND`, so `pull` runs end to end without a Wrangler install, a Cloudflare account or a real site.
 - `test/helpers/run-cli.js` spawns the real CLI in a clean environment: no credentials, no URL settings, no auto-login.
 
-Covered: SQL dump reordering, local database discovery, seed loading (content always stripped), table discovery (retry + fallback list), auth-failure detection and messages, the API client (dev-bypass, token fallback, error shapes), the schema planner (create/update steps, idempotence, breaking block-type changes), argument parsing and CLI flows, and `push` end-to-end against the fake API (dry-run writes nothing, `--apply` is idempotent). The wrangler-facing side (`pull`) is exercised manually.
+Covered: SQL dump reordering, local database discovery, seed loading (content always stripped), table discovery (retry + fallback list), auth-failure detection and messages, the API client (dev-bypass, token fallback, error shapes), the schema planner (create/update steps, idempotence, breaking block-type changes), argument parsing and CLI flows, `push` end-to-end against the fake API (dry-run writes nothing, `--apply` is idempotent), and `pull` end to end — export/import, media mirroring with retries (concurrent downloads, 404 skipped, persistent 5xx failed), the sanitizing of `dump.sql`, the local wipe, and the dry-run writing nothing.
 
 ## ⚠️ Limitations & Requirements
 
